@@ -1,0 +1,12 @@
+name = "gas-masking-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[kv_namespaces]]
+binding = "APPS"
+id = "placeholder_apps_id"
+preview_id = "placeholder_apps_preview_id"
+
+[vars]
+ADMIN_PASSWORD = "admin123"

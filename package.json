@@ -1,0 +1,28 @@
+{
+  "name": "gas-masking-proxy",
+  "version": "1.0.0",
+  "description": "GAS Masking Proxy - Mask personal data in Google Apps Script web apps",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:60686/git/nawa-create/gas-masking"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "hono": "^4.11.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260103.0",
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.54.0"
+  }
+}
