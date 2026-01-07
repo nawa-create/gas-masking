@@ -350,25 +350,29 @@ export function extractUserHtml(html: string): string | null {
 function decodeGasString(str: string): string {
   let decoded = str;
 
-  // Decode hex escapes like \x3c -> <
+  // First, decode hex escapes like \x3c -> < (JSON.parse doesn't support \x)
   decoded = decoded.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
     String.fromCharCode(parseInt(hex, 16))
   );
-  // Decode unicode escapes
-  decoded = decoded.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
-    String.fromCharCode(parseInt(hex, 16))
-  );
-  // Decode standard escapes (order matters - do \\ last)
-  decoded = decoded.replace(/\\n/g, '\n');
-  decoded = decoded.replace(/\\r/g, '\r');
-  decoded = decoded.replace(/\\t/g, '\t');
-  decoded = decoded.replace(/\\"/g, '"');
-  decoded = decoded.replace(/\\\//g, '/');
-  // Handle escaped backslash last
-  decoded = decoded.replace(/\\\\/g, '\\');
-  // Clean up any remaining standalone backslashes before newlines
-  decoded = decoded.replace(/\\\n/g, '\n');
-  decoded = decoded.replace(/\\$/gm, '');
+
+  // Use JSON.parse to handle remaining JavaScript escape sequences
+  try {
+    const jsonString = `"${decoded}"`;
+    decoded = JSON.parse(jsonString);
+  } catch {
+    // Fallback to manual decoding if JSON parse fails
+    // Decode unicode escapes
+    decoded = decoded.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    );
+    // Decode standard escapes
+    decoded = decoded.replace(/\\n/g, '\n');
+    decoded = decoded.replace(/\\r/g, '\r');
+    decoded = decoded.replace(/\\t/g, '\t');
+    decoded = decoded.replace(/\\"/g, '"');
+    decoded = decoded.replace(/\\\//g, '/');
+    decoded = decoded.replace(/\\\\/g, '\\');
+  }
 
   return decoded;
 }
