@@ -2,7 +2,7 @@
  * GAS Masking Proxy - Proxy Functionality
  */
 
-import { maskHtml, rewriteUrls, extractIframeSrc } from './masking';
+import { maskHtml, rewriteUrls, extractIframeSrc, extractUserHtml } from './masking';
 import type { MaskingRule } from './types';
 
 /**
@@ -36,9 +36,32 @@ export async function fetchGasContent(gasUrl: string): Promise<{ html: string; f
   console.log(`[DEBUG] Fetching GAS URL: ${gasUrl}`);
   const { html: mainHtml } = await fetchHtml(gasUrl);
   console.log(`[DEBUG] Main HTML length: ${mainHtml.length}`);
-  console.log(`[DEBUG] Main HTML preview: ${mainHtml.substring(0, 500)}`);
 
-  // Check if there's an iframe (GAS apps embed content in sandboxed iframe)
+  // Try to extract userHtml from the JavaScript (GAS embeds HTML in JS)
+  const userHtml = extractUserHtml(mainHtml);
+  if (userHtml) {
+    console.log(`[DEBUG] Extracted userHtml, length: ${userHtml.length}`);
+    // Wrap in basic HTML structure if it's just a fragment
+    const wrappedHtml = userHtml.includes('<html') ? userHtml : `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table { border-collapse: collapse; }
+    th, td { padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+${userHtml}
+</body>
+</html>`;
+    return { html: wrappedHtml, finalUrl: gasUrl };
+  }
+
+  // Fallback: Check if there's an iframe with src
   const iframeSrc = extractIframeSrc(mainHtml);
   console.log(`[DEBUG] Extracted iframe src: ${iframeSrc}`);
 
@@ -50,8 +73,8 @@ export async function fetchGasContent(gasUrl: string): Promise<{ html: string; f
     return { html: iframeHtml, finalUrl: iframeSrc };
   }
 
-  // No iframe, return the main HTML
-  console.log(`[DEBUG] No iframe found, returning main HTML`);
+  // No userHtml or iframe, return the main HTML
+  console.log(`[DEBUG] No userHtml or iframe found, returning main HTML`);
   return { html: mainHtml, finalUrl: gasUrl };
 }
 

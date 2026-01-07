@@ -287,3 +287,33 @@ export function extractIframeSrc(html: string): string | null {
   }
   return null;
 }
+
+/**
+ * Extract userHtml from GAS page
+ * GAS embeds the actual HTML content in a JavaScript variable called userHtml
+ */
+export function extractUserHtml(html: string): string | null {
+  // Look for the userHtml property in the goog.script.init() call
+  const userHtmlMatch = html.match(/"userHtml":"((?:[^"\\]|\\.)*)"/);
+  if (userHtmlMatch && userHtmlMatch[1]) {
+    // Decode the escaped string
+    let decoded = userHtmlMatch[1];
+    // Decode hex escapes like \x3c -> <
+    decoded = decoded.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    );
+    // Decode unicode escapes
+    decoded = decoded.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    );
+    // Decode standard escapes
+    decoded = decoded.replace(/\\n/g, '\n');
+    decoded = decoded.replace(/\\r/g, '\r');
+    decoded = decoded.replace(/\\t/g, '\t');
+    decoded = decoded.replace(/\\"/g, '"');
+    decoded = decoded.replace(/\\\//g, '/');
+    decoded = decoded.replace(/\\\\/g, '\\');
+    return decoded;
+  }
+  return null;
+}
