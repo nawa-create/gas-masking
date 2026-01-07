@@ -8,5 +8,13 @@ binding = "APPS"
 id = "placeholder_apps_id"
 preview_id = "placeholder_apps_preview_id"
 
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "placeholder_sessions_id"
+preview_id = "placeholder_sessions_preview_id"
+
 [vars]
 ADMIN_PASSWORD = "admin123"
+# Google OAuth credentials (set these in Cloudflare dashboard or use wrangler secret)
+GOOGLE_CLIENT_ID = "your-google-client-id"
+GOOGLE_CLIENT_SECRET = "your-google-client-secret"

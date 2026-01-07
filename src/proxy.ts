@@ -8,14 +8,21 @@ import type { MaskingRule } from './types';
 /**
  * Fetch HTML from a URL with proper headers
  */
-export async function fetchHtml(url: string): Promise<{ html: string; contentType: string }> {
+export async function fetchHtml(url: string, accessToken?: string): Promise<{ html: string; contentType: string }> {
+  const headers: Record<string, string> = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+  };
+
+  // Add authorization header if access token is provided
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+
   const response = await fetch(url, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-    },
+    headers,
     redirect: 'follow',
   });
 
@@ -31,10 +38,10 @@ export async function fetchHtml(url: string): Promise<{ html: string; contentTyp
 /**
  * Fetch GAS app content including iframe content
  */
-export async function fetchGasContent(gasUrl: string): Promise<{ html: string; finalUrl: string }> {
+export async function fetchGasContent(gasUrl: string, accessToken?: string): Promise<{ html: string; finalUrl: string }> {
   // First, fetch the main GAS page
-  console.log(`[DEBUG] Fetching GAS URL: ${gasUrl}`);
-  const { html: mainHtml } = await fetchHtml(gasUrl);
+  console.log(`[DEBUG] Fetching GAS URL: ${gasUrl}${accessToken ? ' (authenticated)' : ''}`);
+  const { html: mainHtml } = await fetchHtml(gasUrl, accessToken);
   console.log(`[DEBUG] Main HTML length: ${mainHtml.length}`);
 
   // Try to extract userHtml from the JavaScript (GAS embeds HTML in JS)
@@ -68,7 +75,7 @@ ${userHtml}
   if (iframeSrc) {
     // Fetch the iframe content (the actual app)
     console.log(`[DEBUG] Fetching iframe content...`);
-    const { html: iframeHtml } = await fetchHtml(iframeSrc);
+    const { html: iframeHtml } = await fetchHtml(iframeSrc, accessToken);
     console.log(`[DEBUG] Iframe HTML length: ${iframeHtml.length}`);
     return { html: iframeHtml, finalUrl: iframeSrc };
   }
@@ -79,16 +86,24 @@ ${userHtml}
 }
 
 /**
+ * Fetch GAS content with authentication (alias for convenience)
+ */
+export async function fetchGasContentWithAuth(gasUrl: string, accessToken: string): Promise<{ html: string; finalUrl: string }> {
+  return fetchGasContent(gasUrl, accessToken);
+}
+
+/**
  * Process and mask GAS app content
  */
 export async function processGasApp(
   gasUrl: string,
   customRules: MaskingRule[],
   useDefaultRules: boolean,
-  proxyBase: string
+  proxyBase: string,
+  accessToken?: string
 ): Promise<string> {
-  // Fetch the GAS content
-  const { html, finalUrl } = await fetchGasContent(gasUrl);
+  // Fetch the GAS content (with or without authentication)
+  const { html, finalUrl } = await fetchGasContent(gasUrl, accessToken);
 
   // Apply masking
   let maskedHtml = maskHtml(html, customRules, useDefaultRules);

@@ -38,5 +38,18 @@ export interface ApiResponse<T> {
 // Cloudflare Workers environment bindings
 export interface Env {
   APPS: KVNamespace;
+  SESSIONS: KVNamespace;
   ADMIN_PASSWORD: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+}
+
+// OAuth Session
+export interface Session {
+  id: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  email: string;
+  createdAt: string;
 }

@@ -22,7 +22,20 @@ import {
   getUseDefaultRules,
   setUseDefaultRules,
 } from './storage';
-import { processGasApp, proxyResource, forwardPost, fetchGasContent } from './proxy';
+import { processGasApp, proxyResource, forwardPost, fetchGasContent, fetchGasContentWithAuth } from './proxy';
+import {
+  getAuthUrl,
+  getRedirectUri,
+  exchangeCodeForTokens,
+  getUserInfo,
+  createSession,
+  getSession,
+  deleteSession,
+  getSessionIdFromCookie,
+  createSessionCookie,
+  createLogoutCookie,
+  refreshAccessToken,
+} from './auth';
 
 // Create Hono app with environment bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -89,18 +102,53 @@ app.get('/view/:appId', async (c) => {
       );
     }
 
+    // Check if user is authenticated (for org-restricted GAS apps)
+    let accessToken: string | undefined;
+    const sessionId = getSessionIdFromCookie(c.req.header('cookie'));
+    if (sessionId) {
+      const session = await getSession(c.env, sessionId);
+      if (session) {
+        const refreshedSession = await refreshAccessToken(c.env, session);
+        if (refreshedSession) {
+          accessToken = refreshedSession.accessToken;
+        }
+      }
+    }
+
     const proxyBase = getProxyBase(c);
     const maskedHtml = await processGasApp(
       appData.url,
       appData.rules,
       appData.useDefaultRules,
-      proxyBase
+      proxyBase,
+      accessToken
     );
 
-    console.log(`[PROXY] GET /view/${appId} - ${appData.name}`);
+    console.log(`[PROXY] GET /view/${appId} - ${appData.name}${accessToken ? ' (authenticated)' : ''}`);
     return c.html(maskedHtml);
   } catch (error) {
     console.error(`[ERROR] Failed to proxy app ${appId}:`, error);
+
+    // Check if it's an authentication error
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isAuthError = errorMessage.includes('401') || errorMessage.includes('403');
+
+    if (isAuthError) {
+      return c.html(
+        `<!DOCTYPE html>
+<html>
+<head><title>認証が必要 - GAS Masking Proxy</title></head>
+<body>
+  <h1>認証が必要です</h1>
+  <p>このGASアプリにアクセスするにはGoogleログインが必要です。</p>
+  <p><a href="/auth/login">Googleでログイン</a></p>
+  <p><a href="/">Back to Dashboard</a></p>
+</body>
+</html>`,
+        401
+      );
+    }
+
     return c.html(
       `<!DOCTYPE html>
 <html>
@@ -108,7 +156,7 @@ app.get('/view/:appId', async (c) => {
 <body>
   <h1>Proxy Error</h1>
   <p>Failed to load the GAS application.</p>
-  <p>Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>
+  <p>Error: ${errorMessage}</p>
   <p><a href="/">Back to Dashboard</a></p>
 </body>
 </html>`,
@@ -185,6 +233,150 @@ app.get('/proxy-resource', async (c) => {
     console.error(`[ERROR] Failed to proxy resource:`, error);
     return c.text('Failed to fetch resource', 500);
   }
+});
+
+// ============================================
+// OAuth Authentication Endpoints
+// ============================================
+
+/**
+ * GET /auth/login - Redirect to Google OAuth
+ */
+app.get('/auth/login', async (c) => {
+  const redirectUri = getRedirectUri(c.req.url);
+  const state = Math.random().toString(36).substring(2, 15);
+
+  // Store state in cookie for CSRF protection
+  const authUrl = getAuthUrl(c.env, redirectUri, state);
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: authUrl,
+      'Set-Cookie': `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
+    },
+  });
+});
+
+/**
+ * GET /auth/callback - OAuth callback handler
+ */
+app.get('/auth/callback', async (c) => {
+  const code = c.req.query('code');
+  const state = c.req.query('state');
+  const error = c.req.query('error');
+
+  if (error) {
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Login Failed</title></head>
+      <body>
+        <h1>Login Failed</h1>
+        <p>Error: ${error}</p>
+        <p><a href="/">Back to Home</a></p>
+      </body>
+      </html>
+    `, 400);
+  }
+
+  if (!code) {
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Login Failed</title></head>
+      <body>
+        <h1>Login Failed</h1>
+        <p>No authorization code received.</p>
+        <p><a href="/">Back to Home</a></p>
+      </body>
+      </html>
+    `, 400);
+  }
+
+  try {
+    const redirectUri = getRedirectUri(c.req.url);
+    const tokens = await exchangeCodeForTokens(c.env, code, redirectUri);
+    const userInfo = await getUserInfo(tokens.accessToken);
+
+    const session = await createSession(
+      c.env,
+      tokens.accessToken,
+      tokens.refreshToken,
+      tokens.expiresIn,
+      userInfo.email
+    );
+
+    console.log(`[AUTH] User logged in: ${userInfo.email}`);
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: '/',
+        'Set-Cookie': createSessionCookie(session.id),
+      },
+    });
+  } catch (err) {
+    console.error('[AUTH] OAuth callback error:', err);
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Login Failed</title></head>
+      <body>
+        <h1>Login Failed</h1>
+        <p>Authentication failed. Please try again.</p>
+        <p><a href="/auth/login">Try Again</a></p>
+      </body>
+      </html>
+    `, 500);
+  }
+});
+
+/**
+ * GET /auth/logout - Logout and clear session
+ */
+app.get('/auth/logout', async (c) => {
+  const sessionId = getSessionIdFromCookie(c.req.header('cookie'));
+
+  if (sessionId) {
+    await deleteSession(c.env, sessionId);
+    console.log(`[AUTH] Session deleted: ${sessionId}`);
+  }
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: '/',
+      'Set-Cookie': createLogoutCookie(),
+    },
+  });
+});
+
+/**
+ * GET /auth/status - Check authentication status
+ */
+app.get('/auth/status', async (c) => {
+  const sessionId = getSessionIdFromCookie(c.req.header('cookie'));
+
+  if (!sessionId) {
+    return c.json({ authenticated: false });
+  }
+
+  const session = await getSession(c.env, sessionId);
+  if (!session) {
+    return c.json({ authenticated: false });
+  }
+
+  // Try to refresh token if expired
+  const refreshedSession = await refreshAccessToken(c.env, session);
+  if (!refreshedSession) {
+    return c.json({ authenticated: false });
+  }
+
+  return c.json({
+    authenticated: true,
+    email: refreshedSession.email,
+  });
 });
 
 // ============================================
