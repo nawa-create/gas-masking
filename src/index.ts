@@ -22,7 +22,7 @@ import {
   getUseDefaultRules,
   setUseDefaultRules,
 } from './storage';
-import { processGasApp, proxyResource, forwardPost } from './proxy';
+import { processGasApp, proxyResource, forwardPost, fetchGasContent } from './proxy';
 
 // Create Hono app with environment bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -30,6 +30,31 @@ const app = new Hono<{ Bindings: Env }>();
 // Middleware
 app.use('*', cors());
 app.use('*', logger());
+
+/**
+ * Debug endpoint to see raw GAS HTML
+ */
+app.get('/debug/:appId', async (c) => {
+  const { appId } = c.req.param();
+  const appData = await getAppWithRules(c.env, appId);
+  if (!appData) {
+    return c.text('App not found', 404);
+  }
+
+  try {
+    const { html, finalUrl } = await fetchGasContent(appData.url);
+    return c.html(`
+      <h1>Debug: ${appData.name}</h1>
+      <p><strong>Original URL:</strong> ${appData.url}</p>
+      <p><strong>Final URL:</strong> ${finalUrl}</p>
+      <p><strong>HTML Length:</strong> ${html.length}</p>
+      <h2>Raw HTML:</h2>
+      <pre style="background:#f0f0f0;padding:10px;overflow:auto;max-height:500px;">${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+    `);
+  } catch (error) {
+    return c.text(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 500);
+  }
+});
 
 // Helper to get proxy base URL
 function getProxyBase(c: { req: { url: string } }): string {
