@@ -182,17 +182,17 @@ export function maskHtml(html: string, customRules: MaskingRule[], useDefaultRul
 function removeGasScripts(html: string): string {
   const $ = cheerio.load(html);
 
-  // Remove Google's framework scripts
-  $('script[src*="script.google.com"]').remove();
-  $('script[src*="googleapis.com"]').remove();
-  $('script[src*="google.com/js"]').remove();
+  // Remove ALL external scripts - GAS apps don't need them for static display
+  $('script[src]').remove();
 
   // Remove inline scripts that reference Google APIs
   $('script').each((_, element) => {
     const content = $(element).html() || '';
-    if (content.includes('google.script') ||
+    if (content.includes('google') ||
         content.includes('warden') ||
-        content.includes('mae_html')) {
+        content.includes('mae_html') ||
+        content.includes('script.') ||
+        content.length > 100) {  // Remove large inline scripts
       $(element).remove();
     }
   });
