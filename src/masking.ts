@@ -293,8 +293,11 @@ export function extractIframeSrc(html: string): string | null {
  * GAS embeds the actual HTML content in a JavaScript variable called userHtml
  */
 export function extractUserHtml(html: string): string | null {
+  // First decode \x22 (escaped quotes) in the HTML to make parsing easier
+  const decodedHtml = html.replace(/\\x22/g, '"');
+
   // Look for the userHtml property in the goog.script.init() call
-  const userHtmlMatch = html.match(/"userHtml":"((?:[^"\\]|\\.)*)"/);
+  const userHtmlMatch = decodedHtml.match(/"userHtml":"((?:[^"\\]|\\.)*)"/);
   if (userHtmlMatch && userHtmlMatch[1]) {
     // Decode the escaped string
     let decoded = userHtmlMatch[1];
