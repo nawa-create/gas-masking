@@ -144,6 +144,11 @@ export function applyCustomRules(html: string, rules: MaskingRule[]): string {
 export function maskHtml(html: string, customRules: MaskingRule[], useDefaultRules: boolean): string {
   let result = html;
 
+  // Clean up any remaining escape sequences before processing
+  result = result.replace(/\\\//g, '/');
+  result = result.replace(/\\"/g, '"');
+  result = result.replace(/\\\\/g, '\\');
+
   // First, remove GAS framework scripts that cause issues
   result = removeGasScripts(result);
 
