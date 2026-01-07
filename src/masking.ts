@@ -144,6 +144,9 @@ export function applyCustomRules(html: string, rules: MaskingRule[]): string {
 export function maskHtml(html: string, customRules: MaskingRule[], useDefaultRules: boolean): string {
   let result = html;
 
+  // First, remove GAS framework scripts that cause issues
+  result = removeGasScripts(result);
+
   // Apply default rules first if enabled
   if (useDefaultRules) {
     const $ = cheerio.load(result);
@@ -171,6 +174,30 @@ export function maskHtml(html: string, customRules: MaskingRule[], useDefaultRul
   }
 
   return result;
+}
+
+/**
+ * Remove GAS framework scripts that interfere with proxy display
+ */
+function removeGasScripts(html: string): string {
+  const $ = cheerio.load(html);
+
+  // Remove Google's framework scripts
+  $('script[src*="script.google.com"]').remove();
+  $('script[src*="googleapis.com"]').remove();
+  $('script[src*="google.com/js"]').remove();
+
+  // Remove inline scripts that reference Google APIs
+  $('script').each((_, element) => {
+    const content = $(element).html() || '';
+    if (content.includes('google.script') ||
+        content.includes('warden') ||
+        content.includes('mae_html')) {
+      $(element).remove();
+    }
+  });
+
+  return $.html();
 }
 
 /**
