@@ -294,47 +294,54 @@ export function extractIframeSrc(html: string): string | null {
  */
 export function extractUserHtml(html: string): string | null {
   // Find userHtml in the goog.script.init() call
-  // The format is: "userHtml":"..." where the value contains escaped characters
-  const startMarker = '"userHtml":"';
-  const startIndex = html.indexOf(startMarker);
-  if (startIndex === -1) {
-    // Try with hex-encoded quotes
-    const hexMarker = '\\x22userHtml\\x22:\\x22';
-    const hexIndex = html.indexOf(hexMarker);
-    if (hexIndex === -1) return null;
+  // The format is: "userHtml":"...",  (followed by next property)
 
-    // Extract from hex-encoded format
+  // Try with hex-encoded quotes first (most common)
+  const hexMarker = '\\x22userHtml\\x22:\\x22';
+  const hexIndex = html.indexOf(hexMarker);
+  if (hexIndex !== -1) {
     const valueStart = hexIndex + hexMarker.length;
-    let value = '';
-    let i = valueStart;
-    while (i < html.length) {
-      // Check for end of string (unescaped \x22)
-      if (html.substring(i, i + 4) === '\\x22' &&
-          (i === valueStart || html[i - 1] !== '\\' ||
-           (i >= 2 && html[i - 2] === '\\'))) {
-        break;
-      }
-      value += html[i];
-      i++;
+    // Find the end marker: \x22,\x22 (end quote, comma, next property quote)
+    // or \x22} (end quote, end of object)
+    const endMarker1 = '\\x22,\\x22';
+    const endMarker2 = '\\x22}';
+
+    let endIndex = html.indexOf(endMarker1, valueStart);
+    const endIndex2 = html.indexOf(endMarker2, valueStart);
+
+    if (endIndex === -1 || (endIndex2 !== -1 && endIndex2 < endIndex)) {
+      endIndex = endIndex2;
     }
+
+    if (endIndex === -1) return null;
+
+    const value = html.substring(valueStart, endIndex);
     return decodeGasString(value);
   }
 
-  // Extract from regular format
-  const valueStart = startIndex + startMarker.length;
-  let value = '';
-  let i = valueStart;
-  while (i < html.length) {
-    if (html[i] === '"' && html[i - 1] !== '\\') {
-      break;
+  // Try with regular quotes
+  const startMarker = '"userHtml":"';
+  const startIndex = html.indexOf(startMarker);
+  if (startIndex !== -1) {
+    const valueStart = startIndex + startMarker.length;
+    // Find end: "," or "}
+    const endMarker1 = '","';
+    const endMarker2 = '"}';
+
+    let endIndex = html.indexOf(endMarker1, valueStart);
+    const endIndex2 = html.indexOf(endMarker2, valueStart);
+
+    if (endIndex === -1 || (endIndex2 !== -1 && endIndex2 < endIndex)) {
+      endIndex = endIndex2;
     }
-    if (html[i] === '"' && html[i - 1] === '\\' && html[i - 2] === '\\') {
-      break;
-    }
-    value += html[i];
-    i++;
+
+    if (endIndex === -1) return null;
+
+    const value = html.substring(valueStart, endIndex);
+    return decodeGasString(value);
   }
-  return decodeGasString(value);
+
+  return null;
 }
 
 /**
