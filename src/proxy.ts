@@ -33,18 +33,25 @@ export async function fetchHtml(url: string): Promise<{ html: string; contentTyp
  */
 export async function fetchGasContent(gasUrl: string): Promise<{ html: string; finalUrl: string }> {
   // First, fetch the main GAS page
+  console.log(`[DEBUG] Fetching GAS URL: ${gasUrl}`);
   const { html: mainHtml } = await fetchHtml(gasUrl);
+  console.log(`[DEBUG] Main HTML length: ${mainHtml.length}`);
+  console.log(`[DEBUG] Main HTML preview: ${mainHtml.substring(0, 500)}`);
 
   // Check if there's an iframe (GAS apps embed content in sandboxed iframe)
   const iframeSrc = extractIframeSrc(mainHtml);
+  console.log(`[DEBUG] Extracted iframe src: ${iframeSrc}`);
 
   if (iframeSrc) {
     // Fetch the iframe content (the actual app)
+    console.log(`[DEBUG] Fetching iframe content...`);
     const { html: iframeHtml } = await fetchHtml(iframeSrc);
+    console.log(`[DEBUG] Iframe HTML length: ${iframeHtml.length}`);
     return { html: iframeHtml, finalUrl: iframeSrc };
   }
 
   // No iframe, return the main HTML
+  console.log(`[DEBUG] No iframe found, returning main HTML`);
   return { html: mainHtml, finalUrl: gasUrl };
 }
 
