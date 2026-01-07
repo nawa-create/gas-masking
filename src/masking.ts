@@ -349,6 +349,7 @@ export function extractUserHtml(html: string): string | null {
  */
 function decodeGasString(str: string): string {
   let decoded = str;
+
   // Decode hex escapes like \x3c -> <
   decoded = decoded.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
     String.fromCharCode(parseInt(hex, 16))
@@ -357,12 +358,17 @@ function decodeGasString(str: string): string {
   decoded = decoded.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
     String.fromCharCode(parseInt(hex, 16))
   );
-  // Decode standard escapes
+  // Decode standard escapes (order matters - do \\ last)
   decoded = decoded.replace(/\\n/g, '\n');
   decoded = decoded.replace(/\\r/g, '\r');
   decoded = decoded.replace(/\\t/g, '\t');
   decoded = decoded.replace(/\\"/g, '"');
   decoded = decoded.replace(/\\\//g, '/');
+  // Handle escaped backslash last
   decoded = decoded.replace(/\\\\/g, '\\');
+  // Clean up any remaining standalone backslashes before newlines
+  decoded = decoded.replace(/\\\n/g, '\n');
+  decoded = decoded.replace(/\\$/gm, '');
+
   return decoded;
 }
