@@ -293,30 +293,69 @@ export function extractIframeSrc(html: string): string | null {
  * GAS embeds the actual HTML content in a JavaScript variable called userHtml
  */
 export function extractUserHtml(html: string): string | null {
-  // First decode \x22 (escaped quotes) in the HTML to make parsing easier
-  const decodedHtml = html.replace(/\\x22/g, '"');
+  // Find userHtml in the goog.script.init() call
+  // The format is: "userHtml":"..." where the value contains escaped characters
+  const startMarker = '"userHtml":"';
+  const startIndex = html.indexOf(startMarker);
+  if (startIndex === -1) {
+    // Try with hex-encoded quotes
+    const hexMarker = '\\x22userHtml\\x22:\\x22';
+    const hexIndex = html.indexOf(hexMarker);
+    if (hexIndex === -1) return null;
 
-  // Look for the userHtml property in the goog.script.init() call
-  const userHtmlMatch = decodedHtml.match(/"userHtml":"((?:[^"\\]|\\.)*)"/);
-  if (userHtmlMatch && userHtmlMatch[1]) {
-    // Decode the escaped string
-    let decoded = userHtmlMatch[1];
-    // Decode hex escapes like \x3c -> <
-    decoded = decoded.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
-      String.fromCharCode(parseInt(hex, 16))
-    );
-    // Decode unicode escapes
-    decoded = decoded.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
-      String.fromCharCode(parseInt(hex, 16))
-    );
-    // Decode standard escapes
-    decoded = decoded.replace(/\\n/g, '\n');
-    decoded = decoded.replace(/\\r/g, '\r');
-    decoded = decoded.replace(/\\t/g, '\t');
-    decoded = decoded.replace(/\\"/g, '"');
-    decoded = decoded.replace(/\\\//g, '/');
-    decoded = decoded.replace(/\\\\/g, '\\');
-    return decoded;
+    // Extract from hex-encoded format
+    const valueStart = hexIndex + hexMarker.length;
+    let value = '';
+    let i = valueStart;
+    while (i < html.length) {
+      // Check for end of string (unescaped \x22)
+      if (html.substring(i, i + 4) === '\\x22' &&
+          (i === valueStart || html[i - 1] !== '\\' ||
+           (i >= 2 && html[i - 2] === '\\'))) {
+        break;
+      }
+      value += html[i];
+      i++;
+    }
+    return decodeGasString(value);
   }
-  return null;
+
+  // Extract from regular format
+  const valueStart = startIndex + startMarker.length;
+  let value = '';
+  let i = valueStart;
+  while (i < html.length) {
+    if (html[i] === '"' && html[i - 1] !== '\\') {
+      break;
+    }
+    if (html[i] === '"' && html[i - 1] === '\\' && html[i - 2] === '\\') {
+      break;
+    }
+    value += html[i];
+    i++;
+  }
+  return decodeGasString(value);
+}
+
+/**
+ * Decode GAS escaped string
+ */
+function decodeGasString(str: string): string {
+  let decoded = str;
+  // Decode hex escapes like \x3c -> <
+  decoded = decoded.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+  // Decode unicode escapes
+  decoded = decoded.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+  // Decode standard escapes
+  decoded = decoded.replace(/\\n/g, '\n');
+  decoded = decoded.replace(/\\r/g, '\r');
+  decoded = decoded.replace(/\\t/g, '\t');
+  decoded = decoded.replace(/\\"/g, '"');
+  decoded = decoded.replace(/\\\//g, '/');
+  decoded = decoded.replace(/\\\\/g, '\\');
+  return decoded;
 }
